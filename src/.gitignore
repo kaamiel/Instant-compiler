@@ -1,4 +1,5 @@
 *.hi
 *.o
-compiler
+insc_jvm
+insc_llvm
 copy.sh
