@@ -1,0 +1,4 @@
+*.hi
+*.o
+compiler
+copy.sh
