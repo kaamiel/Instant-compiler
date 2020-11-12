@@ -1,4 +1,4 @@
-module MainCommon (mainCommon, Err(..), RunFun, myLLexer) where
+module MainCommon (mainCommon, Err(..), RunFun, RunFileFun, myLLexer) where
 
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
@@ -10,12 +10,10 @@ import AbsInstant
 import ErrM
 
 type ParseFun a = [Token] -> Err a
-type RunFun = ParseFun (Program (Maybe (Int, Int))) -> String -> IO ()
+type RunFun = ParseFun (Program (Maybe (Int, Int))) -> String -> IO String
+type RunFileFun = ParseFun (Program (Maybe (Int, Int))) -> FilePath -> IO ()
 
 myLLexer = myLexer
-
-runFile :: ParseFun (Program (Maybe (Int, Int))) -> RunFun -> FilePath -> IO ()
-runFile p r f = readFile f >>= r p
 
 usage :: IO ()
 usage = do
@@ -27,10 +25,9 @@ usage = do
     ]
   exitFailure
 
-mainCommon :: RunFun -> IO ()
-mainCommon run = do
+mainCommon :: RunFileFun -> IO ()
+mainCommon runFile = do
   args <- getArgs
   case args of
     ["--help"] -> usage
-    [] -> getContents >>= run pProgram
-    fs -> mapM_ (runFile pProgram run) fs
+    fs -> mapM_ (runFile pProgram) fs

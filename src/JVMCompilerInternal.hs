@@ -4,7 +4,7 @@ import qualified Data.Map as Map
 import Control.Monad.Except
 import Control.Monad.State
 import System.Exit (exitFailure, exitSuccess)
-import System.IO (stderr, hPutStrLn, hPrint)
+import System.IO (stderr, hPutStrLn)
 import AbsInstant
 
 type SourceLocation = Maybe (Int, Int)
@@ -82,7 +82,7 @@ execProgram :: Program SourceLocation -> StmtState
 execProgram (Prog location stmtsList) =
     mapM_ execStmt stmtsList
 
-compile :: Program SourceLocation -> IO ()
+compile :: Program SourceLocation -> IO String
 compile program = do
     result <- runExceptT . flip evalStateT Map.empty . execProgram $ program
     case result of
