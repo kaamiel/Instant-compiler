@@ -23,7 +23,8 @@ type ExprState = CompilerStateT String
 type StmtState = CompilerStateT ()
 
 prolog, epilog :: String
-prolog = "@dnl = internal constant [4 x i8] c\"%d\\0A\\00\"\n\n\
+prolog =
+    "@dnl = internal constant [4 x i8] c\"%d\\0A\\00\"\n\n\
     \declare i32 @printf(i8*, ...)\n\n\
     \define void @printInt(i32 %x) {\n\
     \    %t0 = getelementptr [4 x i8], [4 x i8]* @dnl, i32 0, i32 0\n\
@@ -32,7 +33,8 @@ prolog = "@dnl = internal constant [4 x i8] c\"%d\\0A\\00\"\n\n\
     \}\n\n\
     \define i32 @main() {\n\
     \entry:\n"
-epilog = "    ret i32 0\n}"
+epilog =
+    "    ret i32 0\n}"
 
 newRegister :: CompilerStateT String
 newRegister = do

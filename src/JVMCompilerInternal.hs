@@ -3,90 +3,176 @@ module JVMCompilerInternal where
 import qualified Data.Map as Map
 import Control.Monad.Except
 import Control.Monad.State
-import System.Exit (exitFailure, exitSuccess)
+import System.Exit (exitFailure)
 import System.IO (stderr, hPutStrLn)
 import AbsInstant
 
 type SourceLocation = Maybe (Int, Int)
 type ErrorMessage = String
 
-data Error =
-    Error SourceLocation ErrorMessage
+data Error
+    = Error SourceLocation ErrorMessage
   deriving Show
 
-type CompilerState = Map.Map Ident Integer
+data CompilerState = CompilerState { localsUsed :: Int, currentStackSize :: Int, maxStackSize :: Int, variables :: Map.Map String Int, output :: ShowS }
 
 type Computation = ExceptT Error IO
 
 type CompilerStateT = StateT CompilerState Computation
-type ExprState = CompilerStateT Integer
+type ExprState = CompilerStateT ()
 type StmtState = CompilerStateT ()
 
+prolog :: String -> Int -> Int -> String
+prolog className locals stack =
+    ".class public " ++ className ++ "\n\
+    \.super java/lang/Object\n\n\
+    \.method public <init>()V\n\
+    \    aload_0\n\
+    \    invokespecial java/lang/Object/<init>()V\n\
+    \    return\n\
+    \.end method\n\n\
+    \.method public static main([Ljava/lang/String;)V\n\
+    \.limit locals " ++ show locals ++ "\n\
+    \.limit stack " ++ show stack ++ "\n"
+epilog :: String
+epilog =
+    "    return\n.end method"
 
--- data Exp a
---     = ExpAdd a (Exp a) (Exp a)
---     | ExpSub a (Exp a) (Exp a)
---     | ExpMul a (Exp a) (Exp a)
---     | ExpDiv a (Exp a) (Exp a)
---     | ExpLit a Integer
---     | ExpVar a Ident
+increaseCurrentStackSize :: CompilerStateT ()
+increaseCurrentStackSize = do
+    newStackSize <- gets $ (+1) . currentStackSize
+    modify $ \state -> state { currentStackSize = newStackSize, maxStackSize = max (maxStackSize state) newStackSize }
 
-evalExpr :: Exp SourceLocation -> ExprState
+decreaseCurrentStackSize :: CompilerStateT ()
+decreaseCurrentStackSize =
+    modify $ \state -> state { currentStackSize = currentStackSize state - 1 }
 
-evalExpr (ExpAdd location e1 e2) = do
-    value1 <- evalExpr e1
-    value2 <- evalExpr e2
-    return $ value1 + value2
+appendToOutput :: String -> CompilerStateT ()
+appendToOutput s =
+    modify $ \state -> state { output = output state . showString "    " . showString s . showChar '\n' }
 
-evalExpr (ExpSub location e1 e2) = do
-    value1 <- evalExpr e1
-    value2 <- evalExpr e2
-    return $ value1 - value2
+includeHeight :: Exp a -> Exp (a, Int)
+includeHeight expr =
+    case expr of
+        ExpAdd location e1 e2 ->
+            let
+                (e1', e2') = (includeHeight e1, includeHeight e2)
+            in
+            ExpAdd (location, max (getHeight e1') (getHeight e2') + 1) e1' e2'
+        ExpSub location e1 e2 ->
+            let
+                (e1', e2') = (includeHeight e1, includeHeight e2)
+            in
+            ExpSub (location, max (getHeight e1') (getHeight e2') + 1) e1' e2'
+        ExpMul location e1 e2 ->
+            let
+                (e1', e2') = (includeHeight e1, includeHeight e2)
+            in
+            ExpMul (location, max (getHeight e1') (getHeight e2') + 1) e1' e2'
+        ExpDiv location e1 e2 ->
+            let
+                (e1', e2') = (includeHeight e1, includeHeight e2)
+            in
+            ExpDiv (location, max (getHeight e1') (getHeight e2') + 1) e1' e2'
+        ExpLit location n ->
+            ExpLit (location, 1) n
+        ExpVar location ident ->
+            ExpVar (location, 1) ident
 
-evalExpr (ExpMul location e1 e2) = do
-    value1 <- evalExpr e1
-    value2 <- evalExpr e2
-    return $ value1 * value2
-
-evalExpr (ExpDiv location e1 e2) = do
-    value1 <- evalExpr e1
-    value2 <- evalExpr e2
-    return $ div value1 value2
-
-evalExpr (ExpLit _ n) =
-    return n
-
-evalExpr (ExpVar location x@(Ident ident)) = do
-    maybeValue <- gets (Map.lookup x)
-    maybe (throwError . Error location $ "undefined variable `" ++ ident ++ "`") return maybeValue
+getHeight :: Exp (a, Int) -> Int
+getHeight (ExpLit (_, h) _) = h
+getHeight (ExpVar (_, h) _) = h
+getHeight (ExpAdd (_, h) _ _) = h
+getHeight (ExpSub (_, h) _ _) = h
+getHeight (ExpMul (_, h) _ _) = h
+getHeight (ExpDiv (_, h) _ _) = h
 
 
 
--- data Stmt a
---     = SAss a Ident (Exp a)
---     | SExp a (Exp a)
+evalExpr :: Exp (SourceLocation, Int) -> ExprState
+
+evalExpr (ExpLit _ n) = do
+    appendToOutput $ instruction n
+    increaseCurrentStackSize
+    where
+        instruction :: Integer -> String
+        instruction j
+            | j == -1          = "iconst_m1"
+            | 0 <= j && j <= 5 = "iconst_" ++ show j
+            | otherwise        = "ldc " ++ show j
+
+evalExpr (ExpVar (location, _) (Ident x)) = do
+    maybeNumber <- gets $ Map.lookup x . variables
+    case maybeNumber of
+        Just k -> do
+            appendToOutput $ "iload" ++ (if k <= 3 then "_" else " ") ++ show k
+            increaseCurrentStackSize
+        Nothing ->
+            throwError . Error location $ "undefined variable `" ++ x ++ "`"
+
+evalExpr (ExpAdd _ e1 e2) =
+    evalArithmeticExpr "iadd" e1 e2
+
+evalExpr (ExpSub _ e1 e2) =
+    evalArithmeticExpr "isub" e1 e2
+
+evalExpr (ExpMul _ e1 e2) =
+    evalArithmeticExpr "imul" e1 e2
+
+evalExpr (ExpDiv _ e1 e2) =
+    evalArithmeticExpr "idiv" e1 e2
+
+evalArithmeticExpr :: String -> Exp (SourceLocation, Int) -> Exp (SourceLocation, Int) -> ExprState
+evalArithmeticExpr instruction arg1 arg2 = do
+    let h1 = getHeight arg1
+    let h2 = getHeight arg2
+    if h1 < h2
+        then do
+            evalExpr arg2
+            evalExpr arg1
+            when (instruction == "isub" || instruction == "idiv") $ appendToOutput "swap"
+        else do
+            evalExpr arg1
+            evalExpr arg2
+    appendToOutput instruction
+    decreaseCurrentStackSize
+
+
 
 execStmt :: Stmt SourceLocation -> StmtState
 
-execStmt (SAss _ x e) = do
-    value <- evalExpr e
-    modify $ Map.insert x value
+execStmt (SAss _ (Ident x) e) = do
+    maybeNumber <- gets $ Map.lookup x . variables
+    evalExpr $ includeHeight e
+    k <- maybe (do
+                    j <- gets localsUsed
+                    modify $ \state -> state { localsUsed = j + 1, variables = Map.insert x j $ variables state }
+                    return j)
+                return
+                maybeNumber
+    appendToOutput $ "istore" ++ (if k <= 3 then "_" else " ") ++ show k
+    decreaseCurrentStackSize
 
 execStmt (SExp _ e) = do
-    value <- evalExpr e
-    liftIO $ print value
+    appendToOutput "getstatic java/lang/System/out Ljava/io/PrintStream;"
+    increaseCurrentStackSize
+    evalExpr $ includeHeight e
+    appendToOutput "invokevirtual java/io/PrintStream/println(I)V"
+    decreaseCurrentStackSize
+    decreaseCurrentStackSize
 
 
 
 execProgram :: Program SourceLocation -> StmtState
-execProgram (Prog location stmtsList) =
+execProgram (Prog _ stmtsList) =
     mapM_ execStmt stmtsList
 
-compile :: Program SourceLocation -> IO String
-compile program = do
-    result <- runExceptT . flip evalStateT Map.empty . execProgram $ program
+compile :: Program SourceLocation -> String -> IO String
+compile program className = do
+    result <- runExceptT . flip execStateT (CompilerState 1 0 0 Map.empty id) . execProgram $ program
     case result of
-        Right () -> exitSuccess
+        Right (CompilerState locals _ stack _ output) -> do
+            return $ showString (prolog className locals stack) . output . showString epilog $ "\n"
         Left (Error location message) -> do
             let l = maybe "unknown location" (\(line, column) -> show line ++ ":" ++ show column) location
             hPutStrLn stderr "An error occurred"

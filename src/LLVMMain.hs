@@ -1,6 +1,6 @@
 module Main where
 
-import System.IO (stderr, hPutStrLn, hPrint)
+import System.IO (stderr, hPutStrLn)
 import System.Exit (exitFailure, exitSuccess, ExitCode(..))
 import System.FilePath (replaceExtension)
 import System.Process
