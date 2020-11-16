@@ -5,7 +5,6 @@ import System.Exit (exitFailure)
 
 import LexInstant
 import ParInstant
-import PrintInstant
 import AbsInstant
 import ErrM
 

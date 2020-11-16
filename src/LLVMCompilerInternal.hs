@@ -112,7 +112,7 @@ compile :: Program SourceLocation -> IO String
 compile program = do
     result <- runExceptT . flip execStateT (CompilerState 0 Set.empty id) . execProgram $ program
     case result of
-        Right (CompilerState _ _ output) -> do
+        Right (CompilerState _ _ output) ->
             return $ showString prolog . output . showString epilog $ "\n"
         Left (Error location message) -> do
             let l = maybe "unknown location" (\(line, column) -> show line ++ ":" ++ show column) location

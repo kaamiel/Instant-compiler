@@ -14,7 +14,7 @@ data Error
     = Error SourceLocation ErrorMessage
   deriving Show
 
-data CompilerState = CompilerState { localsUsed :: Int, currentStackSize :: Int, maxStackSize :: Int, variables :: Map.Map String Int, output :: ShowS }
+data CompilerState = CompilerState { currentStackSize :: Int, maxStackSize :: Int, variables :: Map.Map String Int, output :: ShowS }
 
 type Computation = ExceptT Error IO
 
@@ -145,8 +145,8 @@ execStmt (SAss _ (Ident x) e) = do
     maybeNumber <- gets $ Map.lookup x . variables
     evalExpr $ includeHeight e
     k <- maybe (do
-                    j <- gets localsUsed
-                    modify $ \state -> state { localsUsed = j + 1, variables = Map.insert x j $ variables state }
+                    j <- gets $ Map.size . variables
+                    modify $ \state -> state { variables = Map.insert x j $ variables state }
                     return j)
                 return
                 maybeNumber
@@ -169,10 +169,10 @@ execProgram (Prog _ stmtsList) =
 
 compile :: Program SourceLocation -> String -> IO String
 compile program className = do
-    result <- runExceptT . flip execStateT (CompilerState 1 0 0 Map.empty id) . execProgram $ program
+    result <- runExceptT . flip execStateT (CompilerState 0 0 (Map.singleton "_args" 0) id) . execProgram $ program
     case result of
-        Right (CompilerState locals _ stack _ output) -> do
-            return $ showString (prolog className locals stack) . output . showString epilog $ "\n"
+        Right (CompilerState _ stack variables output) ->
+            return $ showString (prolog className (Map.size variables) stack) . output . showString epilog $ "\n"
         Left (Error location message) -> do
             let l = maybe "unknown location" (\(line, column) -> show line ++ ":" ++ show column) location
             hPutStrLn stderr "An error occurred"
