@@ -97,9 +97,11 @@ evalExpr (ExpLit _ n) = do
     where
         instruction :: Integer -> String
         instruction j
-            | j == -1          = "iconst_m1"
-            | 0 <= j && j <= 5 = "iconst_" ++ show j
-            | otherwise        = "ldc " ++ show j
+            | j == -1                   = "iconst_m1"
+            | 0 <= j && j <= 5          = "iconst_" ++ show j
+            | -128 <= j && j <= 127     = "bipush " ++ show j
+            | -32768 <= j && j <= 32767 = "sipush " ++ show j
+            | otherwise                 = "ldc " ++ show j
 
 evalExpr (ExpVar (location, _) (Ident x)) = do
     maybeNumber <- gets $ Map.lookup x . variables
