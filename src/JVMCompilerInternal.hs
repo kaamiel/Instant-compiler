@@ -22,8 +22,8 @@ type CompilerStateT = StateT CompilerState Computation
 type ExprState = CompilerStateT ()
 type StmtState = CompilerStateT ()
 
-prolog :: String -> Int -> Int -> String
-prolog className locals stack =
+prologue :: String -> Int -> Int -> String
+prologue className locals stack =
     ".class public " ++ className ++ "\n\
     \.super java/lang/Object\n\n\
     \.method public <init>()V\n\
@@ -34,8 +34,8 @@ prolog className locals stack =
     \.method public static main([Ljava/lang/String;)V\n\
     \.limit locals " ++ show locals ++ "\n\
     \.limit stack " ++ show stack ++ "\n"
-epilog :: String
-epilog =
+epilogue :: String
+epilogue =
     "    return\n.end method"
 
 increaseCurrentStackSize :: CompilerStateT ()
@@ -174,7 +174,7 @@ compile program className = do
     result <- runExceptT . flip execStateT (CompilerState 0 0 (Map.singleton "_args" 0) id) . execProgram $ program
     case result of
         Right (CompilerState _ stack variables output) ->
-            return $ showString (prolog className (Map.size variables) stack) . output . showString epilog $ "\n"
+            return $ showString (prologue className (Map.size variables) stack) . output . showString epilogue $ "\n"
         Left (Error location message) -> do
             let l = maybe "unknown location" (\(line, column) -> show line ++ ":" ++ show column) location
             hPutStrLn stderr "An error occurred"

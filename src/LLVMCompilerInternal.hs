@@ -22,8 +22,8 @@ type CompilerStateT = StateT CompilerState Computation
 type ExprState = CompilerStateT String
 type StmtState = CompilerStateT ()
 
-prolog, epilog :: String
-prolog =
+prologue, epilogue :: String
+prologue =
     "@dnl = internal constant [4 x i8] c\"%d\\0A\\00\"\n\n\
     \declare i32 @printf(i8*, ...)\n\n\
     \define void @printInt(i32 %x) {\n\
@@ -33,7 +33,7 @@ prolog =
     \}\n\n\
     \define i32 @main() {\n\
     \entry:\n"
-epilog =
+epilogue =
     "    ret i32 0\n}"
 
 newRegister :: CompilerStateT String
@@ -113,7 +113,7 @@ compile program = do
     result <- runExceptT . flip execStateT (CompilerState 0 Set.empty id) . execProgram $ program
     case result of
         Right (CompilerState _ _ output) ->
-            return $ showString prolog . output . showString epilog $ "\n"
+            return $ showString prologue . output . showString epilogue $ "\n"
         Left (Error location message) -> do
             let l = maybe "unknown location" (\(line, column) -> show line ++ ":" ++ show column) location
             hPutStrLn stderr "An error occurred"
