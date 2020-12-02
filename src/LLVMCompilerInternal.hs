@@ -16,7 +16,7 @@ data Error
 
 data CompilerState = CompilerState { nextRegister :: Int, variables :: Set.Set String, output :: ShowS }
 
-type Computation = ExceptT Error IO
+type Computation = Except Error
 
 type CompilerStateT = StateT CompilerState Computation
 type ExprState = CompilerStateT String
@@ -110,7 +110,7 @@ execProgram (Prog _ stmtsList) =
 
 compile :: Program SourceLocation -> IO String
 compile program = do
-    result <- runExceptT . flip execStateT (CompilerState 0 Set.empty id) . execProgram $ program
+    let result = runExcept . flip execStateT (CompilerState 0 Set.empty id) . execProgram $ program
     case result of
         Right (CompilerState _ _ output) ->
             return $ showString prologue . output . showString epilogue $ "\n"

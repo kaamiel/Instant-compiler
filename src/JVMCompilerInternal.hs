@@ -16,7 +16,7 @@ data Error
 
 data CompilerState = CompilerState { currentStackSize :: Int, maxStackSize :: Int, variables :: Map.Map String Int, output :: ShowS }
 
-type Computation = ExceptT Error IO
+type Computation = Except Error
 
 type CompilerStateT = StateT CompilerState Computation
 type ExprState = CompilerStateT ()
@@ -171,7 +171,7 @@ execProgram (Prog _ stmtsList) =
 
 compile :: Program SourceLocation -> String -> IO String
 compile program className = do
-    result <- runExceptT . flip execStateT (CompilerState 0 0 (Map.singleton "_args" 0) id) . execProgram $ program
+    let result = runExcept . flip execStateT (CompilerState 0 0 (Map.singleton "_args" 0) id) . execProgram $ program
     case result of
         Right (CompilerState _ stack variables output) ->
             return $ showString (prologue className (Map.size variables) stack) . output . showString epilogue $ "\n"

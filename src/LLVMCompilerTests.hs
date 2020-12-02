@@ -10,16 +10,16 @@ import Control.Monad.State
 
 {- | evalExpr tests
 
->>> runExceptT . flip evalStateT (CompilerState 0 Set.empty id) . evalExpr $ ExpLit Nothing 11
+>>> runExcept . flip evalStateT (CompilerState 0 Set.empty id) . evalExpr $ ExpLit Nothing 11
 Right "11"
 
->>> runExceptT . flip evalStateT (CompilerState 0 (Set.singleton "a") id) . evalExpr $ ExpVar Nothing (Ident "a")
+>>> runExcept . flip evalStateT (CompilerState 0 (Set.singleton "a") id) . evalExpr $ ExpVar Nothing (Ident "a")
 Right "%_0"
 
->>> runExceptT . flip evalStateT (CompilerState 0 Set.empty id) . evalExpr $ ExpVar (Just (1, 2)) (Ident "b")
+>>> runExcept . flip evalStateT (CompilerState 0 Set.empty id) . evalExpr $ ExpVar (Just (1, 2)) (Ident "b")
 Left (Error (Just (1,2)) "undefined variable `b`")
 
->>> runExceptT . flip evalStateT (CompilerState 0 Set.empty id) . evalExpr $ ExpAdd Nothing (ExpLit Nothing 1) (ExpLit Nothing 2)
+>>> runExcept . flip evalStateT (CompilerState 0 Set.empty id) . evalExpr $ ExpAdd Nothing (ExpLit Nothing 1) (ExpLit Nothing 2)
 Right "%_0"
 
 -}
